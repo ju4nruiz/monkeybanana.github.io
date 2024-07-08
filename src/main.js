@@ -1,13 +1,29 @@
-import startGame from "kaplay";
+/*import startGame from "kaplay";
 
 const k = startGame({
-  width: 1024,
-  height: 576,
-  scale: 1.5,
+  width: screen.width,
+  height: screen.height,
   letterbox: true,
-});
+}); */
+import k from "./kaboom";
 let gameOver = false;
-loadSprite("bean", "sprites/playerdown.png", {
+
+//added layers
+layers(["background", "game", "foreground"], "game");
+
+loadSprite("poof", "sprites/poof.png", {
+  sliceX: 5,
+  sliceY: 1,
+  anims: {
+    death: {
+      from: 0,
+      to: 4,
+      loop: false,
+      speed: 10,
+    },
+  },
+});
+loadSprite("player", "sprites/playerdown.png", {
   sliceX: 6,
   sliceY: 9,
   anims: {
@@ -71,8 +87,43 @@ loadSprite("bean", "sprites/playerdown.png", {
 });
 
 loadSprite("fondo", "sprites/map.png");
+loadSprite("collectibles", "sprites/collectibles.png", {
+  sliceX: 7,
+  sliceY: 2,
+  anims: {
+    drop: {
+      from: 0,
+      to: 6,
+      loop: false,
+      speed: 10,
+    },
+  },
+});
 loadSprite("banana", "sprites/banana.png");
-
+loadSprite("heart", "sprites/heart.png", {
+  sliceX: 4,
+  sliceY: 1,
+  anims: {
+    active: {
+      from: 0,
+      to: 3,
+      loop: true,
+      speed: 10,
+    },
+  },
+});
+loadSprite("tripleshot", "sprites/tripleshot.png", {
+  sliceX: 4,
+  sliceY: 1,
+  anims: {
+    active: {
+      from: 0,
+      to: 3,
+      loop: true,
+      speed: 5,
+    },
+  },
+});
 loadSprite("death", "sprites/death.png");
 loadSprite("enemy1", "sprites/enemy.png", {
   sliceX: 6,
@@ -222,19 +273,20 @@ if (gameOver === false) {
   add([sprite("fondo", { width: width(), height: height() })]);
 }
 
-const SPEED = 160;
+const SPEED = 200;
 let score = 0;
 let enemySpawnInterval = 3; // Initial spawn interval in seconds
 let spawnIntervalHandle;
 
 // Player setup
 const player = add([
-  sprite("bean", {
+  sprite("player", {
     anim: "idle",
   }),
-  pos(center()),
+  pos(screen.width / 2, screen.height / 2),
   rotate(0),
-  scale(0.4),
+  scale(0.3),
+  layer("foreground"),
   area(), // Add hitbox to player
   "player",
 ]);
@@ -257,9 +309,10 @@ function spawnBanana(playerPos) {
 
   const banana = add([
     sprite("banana"),
-    scale(0.2),
+    scale(0.15),
     pos(playerPos),
     area(),
+    layer("game"),
     rotate(0), // Add hitbox to banana
     {
       update() {
@@ -320,13 +373,14 @@ function spawnEnemy() {
   const enemyType = getRandomEnemyType();
   const enemy = add([
     sprite(enemyType.sprite),
-    scale(0.5),
+    scale(0.4),
     pos(spawnPos),
+    layer("foreground"),
     area(), // Add hitbox to enemy
     {
       update() {
         const direction = player.pos.sub(this.pos).unit();
-        this.move(direction.scale(300));
+        this.move(direction.scale(400));
 
         if (Math.abs(direction.x) > Math.abs(direction.y)) {
           if (direction.x > 0) {
@@ -351,6 +405,7 @@ function spawnEnemy() {
         }
         if (this.isColliding(player)) {
           destroy(player);
+          destroy(enemy);
           console.log("Player died!");
           add([sprite("death", { width: width(), height: height() })]);
           showDeathMenu();
@@ -358,6 +413,8 @@ function spawnEnemy() {
 
         get("banana").forEach((banana) => {
           if (this.isColliding(banana)) {
+            // targetPos.sub(this.pos).unit()
+            poofAnim(this.pos.x, this.pos.y);
             destroy(this);
             destroy(banana);
             console.log("Enemy hit by banana!");
@@ -375,23 +432,47 @@ function spawnEnemy() {
   ]);
 }
 
+//function for poof anim
+function poofAnim(x, y) {
+  const poof = add([
+    sprite("poof"),
+    pos(x, y),
+    area(),
+    layer("game"),
+    opacity(1),
+    lifespan(0.5, { fade: 0.5 }),
+  ]);
+  poof.play("death");
+}
+
 // Function to handle the death men
 function showDeathMenu() {
-  add([
+  const camCenter = camPos();
+
+  const gameOverText = add([
     text("Game Over", { size: 48 }),
     color(255, 255, 255),
-    pos(center().x, center().y - 48),
+    pos(camCenter.x, camCenter.y - 48),
   ]);
-  add([
+  gameOverText.pos = vec2(
+    camCenter.x - gameOverText.width / 2,
+    camCenter.y - 48
+  );
+
+  const scoreText = add([
     text(`Score: ${score}`, { size: 24 }),
     color(255, 255, 255),
-    pos(center().x, center().y),
+    pos(camCenter.x, camCenter.y),
   ]);
-  add([
+  scoreText.pos = vec2(camCenter.x - scoreText.width / 2, camCenter.y);
+
+  const restartText = add([
     text("Click to Restart", { size: 24 }),
     color(255, 255, 255),
-    pos(center().x, center().y + 48),
+    pos(camCenter.x, camCenter.y + 48),
   ]);
+  restartText.pos = vec2(camCenter.x - restartText.width / 2, camCenter.y + 48);
+
   onClick(() => location.reload());
 }
 
@@ -467,7 +548,7 @@ onKeyDown("a", () => {
   }
 });
 onKeyDown("d", () => {
-  if (player.pos.x < 1500 - player.width) {
+  if (player.pos.x < screen.width - player.width / 2) {
     player.move(SPEED, 0);
     updatePlayerAnimation();
   }
@@ -479,7 +560,7 @@ onKeyDown("w", () => {
   }
 });
 onKeyDown("s", () => {
-  if (player.pos.y < 1024 - player.height) {
+  if (player.pos.y < screen.height - player.height / 2) {
     player.move(0, SPEED);
     updatePlayerAnimation();
   }
@@ -495,4 +576,77 @@ onKeyDown("s", () => {
 onClick(() => {
   spawnBanana(player.pos);
 });
+
+// Function to zoom in
+// Define screen dimensions
+const SCREEN_WIDTH = width();
+const SCREEN_HEIGHT = height();
+
+// Set initial camera scale
+const INITIAL_SCALE = 1.7;
+camScale(INITIAL_SCALE);
+function updateCameraPosition() {
+  const halfScreenWidth = SCREEN_WIDTH / camScale().x / 2;
+  const halfScreenHeight = SCREEN_HEIGHT / camScale().y / 2;
+
+  let newX = player.pos.x;
+  let newY = player.pos.y;
+
+  if (newX < halfScreenWidth) {
+    newX = halfScreenWidth;
+  } else if (newX > SCREEN_WIDTH - halfScreenWidth) {
+    newX = SCREEN_WIDTH - halfScreenWidth;
+  }
+
+  if (newY < halfScreenHeight) {
+    newY = halfScreenHeight;
+  } else if (newY > SCREEN_HEIGHT - halfScreenHeight) {
+    newY = SCREEN_HEIGHT - halfScreenHeight;
+  }
+
+  camPos(newX, newY);
+}
+
+
+
+// //TODO
+// // fix collectibles to properly display and give a buff
+// //
+
+// const collectibles = add([
+//   sprite("collectibles"),
+//   pos(Math.random() * width(), Math.random() * height()),
+//   area(),
+//   layer("game"),
+//   scale(2),
+//   "collectibles",
+// ]);
+// onKeyDown("f", () => {
+//   collectibles;
+// });
+
+// onCollide("collectibles", "player", () => {
+//   collectibles.play("drop", {
+//     loop: false,
+//     onEnd: () => {
+//       const { x, y } = collectibles.pos;
+//       const heart = add([
+//         sprite("tripleshot"),
+//         pos(x, y),
+//         area(),
+//         layer("game"),
+//         scale(1),
+//         body(),
+//         "pickup",
+//       ]);
+//       destroy(collectibles);
+//       heart.play("active");
+//     },
+//   });
+// });
+// Update the camera position to follow the player and keep it within bounds
+onUpdate("player", () => {
+  updateCameraPosition();
+});
+
 spawnEnemy();
